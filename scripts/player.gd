@@ -5,12 +5,17 @@ var pivot: Node3D
 var model: Node3D
 var active: bool = true
 var pitch: float = -0.12
+var legs: Array[Node3D] = []
 
 func part(pos: Vector3, size: Vector3, color: Color) -> void:
 	var mesh := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = size
-	mesh.mesh = box
+	var rounded := SphereMesh.new()
+	rounded.radius = 0.5
+	rounded.height = 1.0
+	rounded.radial_segments = 20
+	rounded.rings = 12
+	mesh.mesh = rounded
+	mesh.scale = size
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
 	mat.roughness = 0.7
@@ -33,12 +38,19 @@ func _ready() -> void:
 	part(Vector3(0, 1.98, 0.02), Vector3(0.43, 0.14, 0.44), Color("263137"))
 	part(Vector3(0, 1.2, 0.3), Vector3(0.5, 0.65, 0.25), Color("866c4b"))
 	for x in [-0.19, 0.19]:
-		part(Vector3(x, 0.45, 0), Vector3(0.25, 0.9, 0.28), Color("273745"))
+		var leg := Node3D.new()
+		model.add_child(leg)
+		leg.position = Vector3(x, 0.86, 0)
+		part(Vector3(x, 0.45, 0), Vector3(0.26, 0.85, 0.3), Color("273745"))
+		var leg_mesh := model.get_child(model.get_child_count() - 1) as Node3D
+		leg_mesh.reparent(leg, false)
+		leg_mesh.position = Vector3(0, -0.4, 0)
+		legs.append(leg)
 		part(Vector3(x * 2, 1.25, -0.18), Vector3(0.18, 0.22, 0.7), Color("344b4a"))
 	part(Vector3(0.4, 1.36, -0.65), Vector3(0.13, 0.18, 0.9), Color("171e23"))
 	pivot = Node3D.new()
 	add_child(pivot)
-	pivot.position.y = 1.65
+	pivot.position = Vector3(0.65, 1.65, 0)
 	var arm := SpringArm3D.new()
 	pivot.add_child(arm)
 	arm.spring_length = 4.0
@@ -71,5 +83,8 @@ func _physics_process(delta: float) -> void:
 	velocity.x = move_toward(velocity.x, direction.x * speed, delta * 25)
 	velocity.z = move_toward(velocity.z, direction.z * speed, delta * 25)
 	move_and_slide()
+	var walking := Vector2(velocity.x, velocity.z).length()
+	for i in range(legs.size()):
+		legs[i].rotation.x = sin(Time.get_ticks_msec() * 0.012 + i * PI) * minf(walking / 8.0, 0.7)
 	model.position.y = sin(Time.get_ticks_msec() * 0.013) * 0.035 * Vector2(velocity.x, velocity.z).length() / 4.5
 	camera.fov = lerpf(camera.fov, 52.0 if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) else 72.0, minf(1, delta * 10))

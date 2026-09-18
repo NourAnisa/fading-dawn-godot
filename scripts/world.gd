@@ -1,6 +1,7 @@
 extends Node3D
 
 const Player = preload("res://scripts/player.gd")
+const Dressing = preload("res://scripts/dressing.gd")
 var player: Player
 var enemies: Array[Node3D] = []
 var supplies: Array[Node3D] = []
@@ -68,7 +69,7 @@ func _ready() -> void:
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.fog_enabled = true
 	env.fog_light_color = Color("859995")
-	env.fog_density = 0.007
+	env.fog_density = 0.0025
 	env.glow_enabled = true
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
@@ -80,16 +81,16 @@ func _ready() -> void:
 	sun.light_energy = 1.5
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 90.0
-	var ground := material(Color("344238"))
+	var ground := Dressing.surface(Color("354431"), Color("736b4e"), 0.7)
 	var wood := material(Color("443d34"))
-	var wall := material(Color("6c7770"))
+	var wall := Dressing.surface(Color("454c49"), Color("9a9b83"), 3.0)
 	var metal := material(Color("28383e"))
 	box(self, Vector3(0, -0.5, 0), Vector3(180, 1, 180), ground, true)
 	box(self, Vector3(0, 0.015, -14), Vector3(7, 0.02, 110), material(Color("545149")))
 	for x in [-90, 90]:
-		box(self, Vector3(x, 4, 0), Vector3(1, 8, 180), wood, true)
+		box(self, Vector3(x, 4, 0), Vector3(1, 8, 180), wood, true).visible = false
 	for z in [-90, 90]:
-		box(self, Vector3(0, 4, z), Vector3(180, 8, 1), wood, true)
+		box(self, Vector3(0, 4, z), Vector3(180, 8, 1), wood, true).visible = false
 	# Open-front derelict shelter: accessible interior and porch.
 	box(self, Vector3(0, 0.18, -22), Vector3(15, 0.35, 12), wood, true)
 	box(self, Vector3(0, 3, -28), Vector3(15, 6, 0.3), wall, true)
@@ -109,41 +110,9 @@ func _ready() -> void:
 	sign.text = "ASHWOOD  /  RESEARCH OUTPOST"
 	sign.font_size = 48
 	sign.pixel_size = 0.006
-	for i in range(160):
-		var p := Vector3(rng.randf_range(-85, 85), 0, rng.randf_range(-85, 85))
-		if absf(p.x) < 11 and p.z > -35 and p.z < 30:
-			continue
-		var h := rng.randf_range(7, 15)
-		var trunk := CylinderMesh.new()
-		trunk.top_radius = 0.13
-		trunk.bottom_radius = 0.45
-		trunk.height = h
-		shape(self, trunk, p + Vector3(0, h / 2, 0), wood)
-		for j in range(3):
-			var leaves := CylinderMesh.new()
-			leaves.top_radius = 0.0
-			leaves.bottom_radius = 3.3 - j * 0.6
-			leaves.height = 5
-			leaves.radial_segments = 10
-			shape(self, leaves, p + Vector3(0, h * 0.6 + j * 2, 0), material(Color(0.12, rng.randf_range(0.23, 0.34), 0.22)))
-	# Batched grass keeps thousands of blades to a single draw batch.
-	var grass_mesh := QuadMesh.new()
-	grass_mesh.size = Vector2(0.13, 0.65)
-	var grass_mat := material(Color("697953"))
-	grass_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.mesh = grass_mesh
-	mm.instance_count = 9000
-	for i in range(mm.instance_count):
-		var p := Vector3(rng.randf_range(-70, 70), 0.32, rng.randf_range(-70, 70))
-		if absf(p.x) < 4 or (absf(p.x) < 9 and p.z < -12 and p.z > -30):
-			p.y = -5
-		mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, rng.randf_range(0, TAU)), p))
-	var grass := MultiMeshInstance3D.new()
-	grass.multimesh = mm
-	grass.material_override = grass_mat
-	add_child(grass)
+	var dressing := Dressing.new()
+	add_child(dressing)
+	dressing.build(self)
 	for p in [Vector3(-4, 0.6, -22), Vector3(13, 0.6, -8), Vector3(-15, 0.6, -35)]:
 		var crate := box(self, p, Vector3(1.2, 1.2, 1.2), metal)
 		box(crate, Vector3(0, 0.62, 0), Vector3(1, 0.06, 1), material(Color("68e3bf"), true))
@@ -170,20 +139,34 @@ func _ready() -> void:
 		enemies.append(enemy)
 	var ui := CanvasLayer.new()
 	add_child(ui)
+	var screen := Control.new()
+	ui.add_child(screen)
+	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	objective = Label.new()
-	ui.add_child(objective)
+	screen.add_child(objective)
 	objective.position = Vector2(32, 28)
 	objective.add_theme_font_size_override("font_size", 22)
 	objective.add_theme_color_override("font_color", Color("f4d6a0"))
 	hud = Label.new()
-	ui.add_child(hud)
+	screen.add_child(hud)
 	hud.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	hud.position = Vector2(32, -116)
+	hud.offset_left = 32
+	hud.offset_top = -116
+	hud.offset_right = 1000
+	hud.offset_bottom = -16
 	hud.add_theme_font_size_override("font_size", 19)
+	for label in [hud, objective]:
+		label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+		label.add_theme_constant_override("shadow_offset_x", 2)
+		label.add_theme_constant_override("shadow_offset_y", 2)
 	var reticle := Label.new()
-	ui.add_child(reticle)
+	screen.add_child(reticle)
 	reticle.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	reticle.position = Vector2(-7, -15)
+	reticle.offset_left = -7
+	reticle.offset_top = -15
+	reticle.offset_right = 15
+	reticle.offset_bottom = 20
 	reticle.text = "+"
 	reticle.add_theme_font_size_override("font_size", 25)
 
